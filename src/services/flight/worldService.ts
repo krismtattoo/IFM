@@ -1,4 +1,3 @@
-
 import { API_KEY, BASE_URL } from './types';
 import { getServerIdByName } from './serverService';
 
@@ -70,3 +69,5 @@ export async function getWorldStatus(serverName: string): Promise<AirportStatus[
     throw error;
   }
 }
+
+export { getWorldStatus as fetchWorldData };

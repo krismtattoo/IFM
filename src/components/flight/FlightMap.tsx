@@ -32,6 +32,7 @@ const FlightMap: React.FC = () => {
         const data = await fetchWorldData();
         setAirports(data);
         setLoading(false);
+        console.log('Geladene Flughäfen:', data);
       } catch (err) {
         setError('Fehler beim Laden der Flugdaten');
         setLoading(false);
@@ -62,6 +63,11 @@ const FlightMap: React.FC = () => {
       {/* Top Airports Widget */}
       <div className="absolute top-4 left-4 z-50">
         <TopAirports airports={airports} />
+        {airports.length === 0 && (
+          <div className="mt-2 p-4 bg-slate-800 text-white rounded-lg shadow-lg">
+            Keine Flughäfen gefunden.
+          </div>
+        )}
       </div>
 
       {/* Loading Overlay */}
