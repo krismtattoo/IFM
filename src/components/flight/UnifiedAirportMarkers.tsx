@@ -220,14 +220,23 @@ const UnifiedAirportMarkers: React.FC<UnifiedAirportMarkersProps> = ({
 
     // Create new unified markers
     unifiedAirports.forEach(airportData => {
-      const marker = createAirportMarker(airportData);
-      if (marker) {
-        try {
-          marker.addTo(map);
-          markersRef.current[airportData.icao] = marker;
-        } catch (error) {
-          console.error(`❌ Failed to add airport marker to map for ${airportData.icao}:`, error);
+      // Überprüfe, ob Live-Daten vorhanden sind und die Gesamtzahl der Flüge größer als 0 ist
+      const totalFlights = airportData.liveData ? 
+        (airportData.liveData.inboundFlightsCount || 0) + (airportData.liveData.outboundFlightsCount || 0) : 0;
+        
+      if (totalFlights > 0) {
+        const marker = createAirportMarker(airportData);
+        if (marker) {
+          try {
+            marker.addTo(map);
+            markersRef.current[airportData.icao] = marker;
+          } catch (error) {
+            console.error(`❌ Failed to add airport marker to map for ${airportData.icao}:`, error);
+          }
         }
+      } else {
+        // Optional: Log, wenn ein Marker aufgrund von 0 Flügen nicht erstellt wird
+        // console.log(`🚫 Skipping airport marker for ${airportData.icao} (0 flights)`);
       }
     });
 

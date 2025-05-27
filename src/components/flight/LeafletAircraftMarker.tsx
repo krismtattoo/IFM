@@ -130,7 +130,7 @@ const LeafletAircraftMarker: React.FC<LeafletAircraftMarkerProps> = ({
       html: svgIcon,
       className: `aircraft-marker ${isSelected ? 'aircraft-marker-selected' : ''}`,
       iconSize: isSelected ? [28, 28] : [24, 24],
-      iconAnchor: isSelected ? [14, 14] : [12, 12],
+      iconAnchor: isSelected ? [14, 10] : [12, 8],
     });
   }, [isOnGround, isDarkMode, selectedFlightId, selectionInProgress]);
 

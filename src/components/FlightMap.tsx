@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import L from 'leaflet';
 import { History, Sun, Moon } from 'lucide-react';
 import { EarlyAccessAlert } from './EarlyAccessAlert';
+import EarlyAccessPopup from './EarlyAccessPopup';
 
 // Import our components
 import ServerSelection from './flight/ServerSelection';
@@ -53,9 +54,6 @@ const FlightMap: React.FC = () => {
   // Debug log for flights changes
   useEffect(() => {
     console.log(`🛩️ FlightMap - Flights updated: ${flights.length} flights`);
-    if (flights.length > 0) {
-      console.log(`📋 First 3 flights: ${flights.slice(0, 3).map(f => f.flightId).join(', ')}`);
-    }
   }, [flights]);
   
   const [map, setMap] = useState<L.Map | null>(null);
@@ -151,19 +149,19 @@ const FlightMap: React.FC = () => {
 
   // Improved flight selection handler with immediate state protection
   const handleFlightSelect = useCallback(async (flight: Flight) => {
-    console.log(`🎯 Flight selected: ${flight.flightId} - Starting selection process`);
+    console.log(`🎯 Flight selected: ${flight.id} - Starting selection process`);
     
     // Clear any airport markers when selecting a flight
     airportMarkers.forEach(marker => map?.removeLayer(marker));
     setAirportMarkers([]);
     
     // CRITICAL: Set selection in progress IMMEDIATELY to protect marker
-    setSelectionInProgress(flight.flightId);
+    setSelectionInProgress(flight.id);
     
     // CRITICAL: Set selected flight IMMEDIATELY (synchronous)
     setSelectedFlight(flight);
     
-    console.log(`🛡️ PROTECTION ACTIVATED for flight ${flight.flightId}`);
+    console.log(`🛡️ PROTECTION ACTIVATED for flight ${flight.id}`);
     
     if (!activeServer) {
       setSelectionInProgress(null);
@@ -172,9 +170,9 @@ const FlightMap: React.FC = () => {
     
     try {
       // Log debug information
-      console.log(`🔍 Fetching route for flight ${flight.flightId} on server ${activeServer.id}`);
+      console.log(`🔍 Fetching route for flight ${flight.id} on server ${activeServer.id}`);
       
-      const routeData = await getFlightRoute(activeServer.id, flight.flightId);
+      const routeData = await getFlightRoute(activeServer.id, flight.id);
       console.log(`📍 Retrieved flight route data:`, routeData);
       
       setFlownRoute(routeData.flownRoute);
@@ -188,7 +186,7 @@ const FlightMap: React.FC = () => {
         });
       }
       
-      console.log(`✅ Selection process completed for flight ${flight.flightId}`);
+      console.log(`✅ Selection process completed for flight ${flight.id}`);
     } catch (error) {
       console.error("❌ Failed to fetch flight route:", error);
       toast.error("Failed to load flight route.");
@@ -196,7 +194,7 @@ const FlightMap: React.FC = () => {
       // Clear selection in progress after a delay to ensure marker stability
       setTimeout(() => {
         setSelectionInProgress(null);
-        console.log(`🔓 Selection process finished for flight ${flight.flightId}`);
+        console.log(`🔓 Selection process finished for flight ${flight.id}`);
       }, 2000); // 2 second delay to ensure stability
     }
   }, [activeServer, map, airportMarkers]);
@@ -354,7 +352,7 @@ const FlightMap: React.FC = () => {
 
   // Enhanced airport details with flight selection
   const handleAirportFlightSelect = useCallback((flight: Flight) => {
-    console.log(`🛩️ Flight selected from airport panel: ${flight.flightId}`);
+    console.log(`🛩️ Flight selected from airport panel: ${flight.id}`);
     
     // Close airport details
     handleCloseAirportDetails();
@@ -385,13 +383,16 @@ const FlightMap: React.FC = () => {
   // Enhanced selected flight ID calculation
   const selectedFlightId = useMemo(() => {
     // Return either the selected flight ID or the one in progress
-    const id = selectedFlight?.flightId || selectionInProgress || null;
+    const id = selectedFlight?.id || selectionInProgress || null;
     console.log(`🎯 Current selected/protected flight ID: ${id}`);
     return id;
   }, [selectedFlight, selectionInProgress]);
 
   return (
     <div className="relative h-screen w-full bg-[#151920]">
+      {/* Early Access Popup */}
+      <EarlyAccessPopup />
+      
       {/* Early Access Alert */}
       <EarlyAccessAlert />
       
