@@ -55,56 +55,111 @@ const UnifiedAirportMarkers: React.FC<UnifiedAirportMarkersProps> = ({
   }, [liveAirports, staticAirports]);
 
   const createAirportIcon = useCallback((airportData: UnifiedAirportData): L.DivIcon => {
-    const { liveData, staticData, priority } = airportData;
+    const { liveData, staticData } = airportData;
     
-    if (priority === 'live' && liveData) {
-      // Live airport with activity - green circles with pulsing animation
-      const totalFlights = liveData.inboundFlightsCount + liveData.outboundFlightsCount;
-      const hasATC = liveData.atcFacilities.length > 0;
-      const size = Math.min(Math.max(16, totalFlights * 2), 32);
-      
-      return L.divIcon({
-        html: `
-          <div class="unified-airport-marker relative group">
-            <div class="animate-pulse-subtle rounded-full ${hasATC ? 'bg-green-500' : 'bg-green-400'} shadow-lg border-2 border-white opacity-60" 
-                 style="width: ${size}px; height: ${size}px;">
-            </div>
-            ${hasATC ? `
-              <div class="absolute -top-2 -right-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full p-1.5 shadow-lg border border-white/50 transform scale-75 group-hover:scale-100 transition-all duration-200 group-hover:shadow-blue-500/50 group-hover:shadow-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" class="w-3.5 h-3.5">
-                  <path d="M12 1c-4.97 0-9 4.03-9 9v7c0 1.66 1.34 3 3 3h3v-8H5v-2c0-3.87 3.13-7 7-7s7 3.13 7 7v2h-4v8h3c1.66 0 3-1.34 3-3v-7c0-4.97-4.03-9-9-9z"/>
-                </svg>
+    // Berechne die Gesamtanzahl der Flüge
+    const totalFlights = liveData ? 
+      (liveData.inboundFlightsCount || 0) + (liveData.outboundFlightsCount || 0) : 0;
+    
+    // Bestimme die Größe basierend auf der Aktivität
+    const size = Math.min(Math.max(20, totalFlights * 1.5), 36);
+    
+    // Bestimme die Farbe basierend auf der Aktivität
+    let color = '#94A3B8'; // Standard Grau
+    let ringColor = 'rgba(148, 163, 184, 0.3)';
+    
+    if (totalFlights > 15) {
+      color = '#DC2626'; // Rot
+      ringColor = 'rgba(220, 38, 38, 0.3)';
+    } else if (totalFlights > 10) {
+      color = '#F59E0B'; // Orange
+      ringColor = 'rgba(245, 158, 11, 0.3)';
+    } else if (totalFlights > 5) {
+      color = '#10B981'; // Grün
+      ringColor = 'rgba(16, 185, 129, 0.3)';
+    }
+    
+    // Füge ATC-Indikator hinzu, wenn vorhanden
+    const hasATC = liveData?.atcFacilities.length > 0;
+    const atcIndicator = hasATC ? `
+      <div class="absolute -top-4 -right-4 w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center shadow-lg border-2 border-white/80 transform transition-all duration-300 group-hover:scale-110">
+        <div class="absolute inset-0 rounded-full bg-white/10 blur-sm"></div>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" class="w-4 h-4 drop-shadow-sm">
+          <path d="M12 1a7 7 0 0 0-7 7v3a1 1 0 0 0 1 1h2v-4a5 5 0 0 1 10 0v4h2a1 1 0 0 0 1-1V8a7 7 0 0 0-7-7zm-5 10a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h2v-5H7zm10 0h-2v5h2a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1z"/>
+        </svg>
+        <div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-white flex items-center justify-center shadow-sm">
+          <div class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse-subtle"></div>
+        </div>
+        <div class="absolute inset-0 rounded-full animate-ping-slow opacity-75" style="background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);"></div>
+      </div>
+    ` : '';
+    
+    // Erstelle pulsierende Ringe für aktive Flughäfen
+    const pulseRings = totalFlights > 5 ? `
+      <div class="absolute inset-0">
+        <div class="absolute inset-0 rounded-full animate-ping" style="background-color: ${ringColor};"></div>
+        <div class="absolute inset-0 rounded-full animate-ping animation-delay-300" style="background-color: ${ringColor};"></div>
+      </div>
+    ` : '';
+    
+    return L.divIcon({
+      html: `
+        <div class="airport-marker relative group">
+          ${pulseRings}
+          <div class="relative flex items-center justify-center transform transition-all duration-300 group-hover:scale-110" 
+               style="width: ${size}px; height: ${size}px;">
+            <div class="absolute inset-0 rounded-full" style="background-color: ${color}; box-shadow: 0 0 10px ${color};"></div>
+            <div class="absolute inset-0 rounded-full bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            ${totalFlights > 0 ? `
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div class="w-3/4 h-3/4 rounded-full bg-white/90 flex items-center justify-center shadow-sm">
+                  <span class="text-xs font-bold" style="color: ${color};">
+                    ${totalFlights}
+                  </span>
+                </div>
               </div>
             ` : ''}
           </div>
-        `,
-        className: 'unified-airport-marker-container',
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size / 2],
-      });
-    } else if (staticData) {
-      // Static airport only - blue circles with subtle pulsing animation
-      const isInternational = staticData.iata && staticData.iata.length > 0;
-      const colorClass = isInternational ? 'bg-blue-500' : 'bg-blue-400';
-      
-      return L.divIcon({
-        html: `
-          <div class="unified-airport-marker animate-pulse-subtle rounded-full ${colorClass} shadow-lg border-2 border-white opacity-50" 
-               style="width: 16px; height: 16px;">
-          </div>
-        `,
-        className: 'unified-airport-marker-container',
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
-      });
-    }
-    
-    // Fallback (shouldn't happen)
-    return L.divIcon({
-      html: `<div class="w-4 h-4 bg-gray-300 rounded-full opacity-40 animate-pulse-subtle"></div>`,
-      className: 'unified-airport-marker-container',
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
+          ${atcIndicator}
+        </div>
+        <style>
+          @keyframes ping {
+            0% {
+              transform: scale(1);
+              opacity: 0.8;
+            }
+            100% {
+              transform: scale(2);
+              opacity: 0;
+            }
+          }
+          @keyframes ping-slow {
+            0% {
+              transform: scale(1);
+              opacity: 0.5;
+            }
+            50% {
+              opacity: 0.2;
+            }
+            100% {
+              transform: scale(1.5);
+              opacity: 0;
+            }
+          }
+          .animate-ping {
+            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+          }
+          .animate-ping-slow {
+            animation: ping-slow 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+          }
+          .animation-delay-300 {
+            animation-delay: 300ms;
+          }
+        </style>
+      `,
+      className: 'airport-marker-container',
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
     });
   }, []);
 
