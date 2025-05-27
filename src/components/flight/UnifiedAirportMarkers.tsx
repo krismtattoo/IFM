@@ -134,11 +134,6 @@ const UnifiedAirportMarkers: React.FC<UnifiedAirportMarkersProps> = ({
           console.log(`🏢 Airport clicked: ${airportData.icao} (${displayName})`);
           L.DomEvent.stopPropagation(e);
           onAirportSelect(airportData);
-        })
-        .bindTooltip(`${airportData.icao}${iataCode} - ${displayName}`, {
-          permanent: false,
-          direction: 'top',
-          opacity: 0.9
         });
 
       return marker;

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import { Airport } from '@/data/airportData';
@@ -49,11 +48,6 @@ const AllAirportMarkers: React.FC<AllAirportMarkersProps> = ({
           console.log(`🏢 Airport info clicked: ${airport.icao} (${airport.name})`);
           L.DomEvent.stopPropagation(e);
           onAirportSelect(airport);
-        })
-        .bindTooltip(`${airport.icao}${airport.iata ? ` / ${airport.iata}` : ''} - ${airport.name}`, {
-          permanent: false,
-          direction: 'top',
-          opacity: 0.9
         });
 
       return marker;
