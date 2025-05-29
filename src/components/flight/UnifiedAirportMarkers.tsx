@@ -50,7 +50,7 @@ const UnifiedAirportMarkers: React.FC<UnifiedAirportMarkersProps> = ({
     });
     
     const result = Array.from(airportMap.values());
-    console.log(`🔄 Unified ${result.length} airports (${liveAirports.length} live + ${staticAirports.length} static)`);
+    // console.log(`🔄 Unified ${result.length} airports (${liveAirports.length} live + ${staticAirports.length} static)`);
     return result;
   }, [liveAirports, staticAirports]);
 
@@ -106,14 +106,14 @@ const UnifiedAirportMarkers: React.FC<UnifiedAirportMarkersProps> = ({
       html: `
         <div class="airport-marker relative group">
           ${pulseRings}
-          <div class="relative flex items-center justify-center transform transition-all duration-300 group-hover:scale-110" 
+          <div class="relative flex items-center justify-center transform transition-all duration-300 group-hover:scale-110"
                style="width: ${size}px; height: ${size}px;">
             <div class="absolute inset-0 rounded-full" style="background-color: ${color}; box-shadow: 0 0 10px ${color};"></div>
             <div class="absolute inset-0 rounded-full bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             ${totalFlights > 0 ? `
               <div class="absolute inset-0 flex items-center justify-center">
                 <div class="w-3/4 h-3/4 rounded-full bg-white/90 flex items-center justify-center shadow-sm">
-                  <span class="text-xs font-bold" style="color: ${color};">
+                  <span class="text-xs font-bold" style="color: ${color}; font-size: ${Math.max(10, size / 3)}px;">
                     ${totalFlights}
                   </span>
                 </div>
@@ -122,40 +122,6 @@ const UnifiedAirportMarkers: React.FC<UnifiedAirportMarkersProps> = ({
           </div>
           ${atcIndicator}
         </div>
-        <style>
-          @keyframes ping {
-            0% {
-              transform: scale(1);
-              opacity: 0.8;
-            }
-            100% {
-              transform: scale(2);
-              opacity: 0;
-            }
-          }
-          @keyframes ping-slow {
-            0% {
-              transform: scale(1);
-              opacity: 0.5;
-            }
-            50% {
-              opacity: 0.2;
-            }
-            100% {
-              transform: scale(1.5);
-              opacity: 0;
-            }
-          }
-          .animate-ping {
-            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-          }
-          .animate-ping-slow {
-            animation: ping-slow 3s cubic-bezier(0, 0, 0.2, 1) infinite;
-          }
-          .animation-delay-300 {
-            animation-delay: 300ms;
-          }
-        </style>
       `,
       className: 'airport-marker-container',
       iconSize: [size, size],
@@ -195,7 +161,7 @@ const UnifiedAirportMarkers: React.FC<UnifiedAirportMarkersProps> = ({
         keyboard: false
       })
         .on('click', (e) => {
-          console.log(`🏢 Airport clicked: ${airportData.icao} (${displayName})`);
+          // console.log(`🏢 Airport clicked: ${airportData.icao} (${displayName})`);
           L.DomEvent.stopPropagation(e);
           onAirportSelect(airportData);
         });
@@ -216,27 +182,25 @@ const UnifiedAirportMarkers: React.FC<UnifiedAirportMarkersProps> = ({
     });
     markersRef.current = {};
 
-    console.log(`🏢 Creating unified markers for ${unifiedAirports.length} airports`);
+    // console.log(`🏢 Creating unified markers for ${unifiedAirports.length} airports`);
+    // console.log('Live airports:', liveAirports);
+    // console.log('Static airports:', staticAirports);
+    // console.log('Unified airports:', unifiedAirports);
 
     // Create new unified markers
     unifiedAirports.forEach(airportData => {
-      // Überprüfe, ob Live-Daten vorhanden sind und die Gesamtzahl der Flüge größer als 0 ist
-      const totalFlights = airportData.liveData ? 
-        (airportData.liveData.inboundFlightsCount || 0) + (airportData.liveData.outboundFlightsCount || 0) : 0;
-        
-      if (totalFlights > 0) {
-        const marker = createAirportMarker(airportData);
-        if (marker) {
-          try {
-            marker.addTo(map);
-            markersRef.current[airportData.icao] = marker;
-          } catch (error) {
-            console.error(`❌ Failed to add airport marker to map for ${airportData.icao}:`, error);
-          }
+      // console.log(`Processing airportData for ${airportData.icao}:`, airportData);
+      const marker = createAirportMarker(airportData);
+      if (marker) {
+        try {
+          marker.addTo(map);
+          markersRef.current[airportData.icao] = marker;
+          // console.log(`✅ Added marker for ${airportData.icao}`);
+        } catch (error) {
+          console.error(`❌ Failed to add airport marker to map for ${airportData.icao}:`, error);
         }
       } else {
-        // Optional: Log, wenn ein Marker aufgrund von 0 Flügen nicht erstellt wird
-        // console.log(`🚫 Skipping airport marker for ${airportData.icao} (0 flights)`);
+        console.warn(`⚠️ Could not create marker for ${airportData.icao}`);
       }
     });
 
@@ -257,4 +221,4 @@ const UnifiedAirportMarkers: React.FC<UnifiedAirportMarkersProps> = ({
   return null;
 };
 
-export default UnifiedAirportMarkers;
+export default React.memo(UnifiedAirportMarkers);

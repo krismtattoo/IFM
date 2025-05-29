@@ -11,6 +11,8 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
+    port: 5173,
     proxy: {
       '/api': {
         target: 'https://api.infiniteflight.com/public/v2',

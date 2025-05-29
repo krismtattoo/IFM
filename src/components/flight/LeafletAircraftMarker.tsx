@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useMemo, useCallback } from 'react';
 import L from 'leaflet';
-import { Flight } from '@/services/flight';
+import { FlightEntry } from '@/services/flight';
 
 interface LeafletAircraftMarkerProps {
   map: L.Map;
-  flights: Flight[];
-  onFlightSelect: (flight: Flight) => void;
+  flights: FlightEntry[];
+  onFlightSelect: (flight: FlightEntry) => void;
   selectedFlightId?: string | null;
   selectionInProgress?: string | null;
   isDarkMode: boolean;
@@ -20,7 +20,7 @@ const LeafletAircraftMarker: React.FC<LeafletAircraftMarkerProps> = ({
   isDarkMode
 }) => {
   const markersRef = useRef<{ [key: string]: L.Marker }>({});
-  const lastKnownFlightDataRef = useRef<{ [key: string]: Flight }>({});
+  const lastKnownFlightDataRef = useRef<{ [key: string]: FlightEntry }>({});
   const markerMissCountRef = useRef<{ [key: string]: number }>({});
   const protectedMarkersRef = useRef<Set<string>>(new Set());
   const isUpdatingRef = useRef(false);
@@ -49,7 +49,7 @@ const LeafletAircraftMarker: React.FC<LeafletAircraftMarkerProps> = ({
   }, [selectedFlightId, selectionInProgress]);
 
   const flightLookup = useMemo(() => {
-    const lookup: { [key: string]: Flight } = {};
+    const lookup: { [key: string]: FlightEntry } = {};
     flights.forEach(flight => {
       lookup[flight.flightId] = flight;
       lastKnownFlightDataRef.current[flight.flightId] = flight;
@@ -68,7 +68,7 @@ const LeafletAircraftMarker: React.FC<LeafletAircraftMarkerProps> = ({
     
     flights.forEach(f => baseFlightIds.add(f.flightId));
     
-    console.log(`📊 currentFlightIds: ${baseFlightIds.size} total (${flights.length} from API + ${baseFlightIds.size - flights.length} protected)`);
+    console.log(`📊 currentFlightIds: ${baseFlightIds.size} total (${flights.length} from API + ${protectedMarkersRef.current.size} protected)`);
     return baseFlightIds;
   }, [flights]);
 
@@ -92,12 +92,12 @@ const LeafletAircraftMarker: React.FC<LeafletAircraftMarkerProps> = ({
     });
   }, [selectedFlightId, selectionInProgress]);
 
-  const isOnGround = useCallback((flight: Flight): boolean => {
+  const isOnGround = useCallback((flight: FlightEntry): boolean => {
     return flight.altitude < 200;
   }, []);
 
   // UPDATED: Enhanced aircraft icon with subtle shadow and dark mode consideration
-  const createAircraftIcon = useCallback((flight: Flight, isSelected: boolean = false): L.DivIcon => {
+  const createAircraftIcon = useCallback((flight: FlightEntry, isSelected: boolean = false): L.DivIcon => {
     const onGround = isOnGround(flight);
     
     // Color logic: Light blue for selected, lighter grey/white in dark mode (airborne),
@@ -150,7 +150,7 @@ const LeafletAircraftMarker: React.FC<LeafletAircraftMarkerProps> = ({
     }
   }, [map]);
 
-  const updateMarkerStyle = useCallback((marker: L.Marker, flight: Flight, isSelected: boolean) => {
+  const updateMarkerStyle = useCallback((marker: L.Marker, flight: FlightEntry, isSelected: boolean) => {
     try {
       if (!marker || !flight) return;
       
@@ -161,7 +161,7 @@ const LeafletAircraftMarker: React.FC<LeafletAircraftMarkerProps> = ({
     }
   }, [createAircraftIcon]);
 
-  const createMarker = useCallback((flight: Flight): L.Marker | null => {
+  const createMarker = useCallback((flight: FlightEntry): L.Marker | null => {
     try {
       if (!map || !flight) return null;
       
@@ -176,11 +176,17 @@ const LeafletAircraftMarker: React.FC<LeafletAircraftMarkerProps> = ({
         .on('click', (e) => {
           console.log(`🎯 Aircraft clicked: ${flight.flightId} (${flight.callsign})`);
           
-          addImmediateProtection(flight.flightId);
-          
-          L.DomEvent.stopPropagation(e);
-          
-          onFlightSelect(flight);
+          // Get the latest flight data using the lookup
+          const currentFlightData = flightLookup[flight.flightId] || lastKnownFlightDataRef.current[flight.flightId];
+
+          if (currentFlightData) {
+            console.log(`🎯 Using ${flightLookup[flight.flightId] ? 'current' : 'last known'} flight data for click: ${currentFlightData.flightId}`);
+            addImmediateProtection(currentFlightData.flightId);
+            L.DomEvent.stopPropagation(e);
+            onFlightSelect(currentFlightData);
+          } else {
+            console.warn(`⚠️ Could not find current or last known flight data for ${flight.flightId} on click.`);
+          }
         });
 
       return marker;
@@ -248,29 +254,19 @@ const LeafletAircraftMarker: React.FC<LeafletAircraftMarkerProps> = ({
             console.warn(`⚠️ Failed to update existing marker for flight ${flight.flightId}:`, error);
           }
         } else {
-          const groundStatus = isOnGround(flight) ? 'ON GROUND' : 'AIRBORNE';
-          console.log(`➕ Creating new marker for flight ${flight.flightId} (${flight.callsign}) - ${groundStatus}`);
-          
           const newMarker = createMarker(flight);
-          
           if (newMarker) {
-            try {
-              newMarker.addTo(map);
-              markersRef.current[flight.flightId] = newMarker;
-              markerMissCountRef.current[flight.flightId] = 0;
-            } catch (error) {
-              console.error(`❌ Failed to add marker to map for flight ${flight.flightId}:`, error);
-            }
+            markersRef.current[flight.flightId] = newMarker;
+            newMarker.addTo(map);
           }
         }
       });
-
-      console.log(`📊 Active markers: ${Object.keys(markersRef.current).length}, Protected: ${protectedMarkersRef.current.size}`);
-      
+    } catch (error) {
+      console.error("❌ Error updating markers:", error);
     } finally {
       isUpdatingRef.current = false;
     }
-  }, [map, flights, currentFlightIds, createMarker, updateMarkerStyle, isMarkerProtected, selectedFlightId, selectionInProgress, isOnGround, flightLookup, safeRemoveMarker]);
+  }, [map, flights, flightLookup, currentFlightIds, isMarkerProtected, selectedFlightId, selectionInProgress, createMarker, updateMarkerStyle, safeRemoveMarker]);
 
   useEffect(() => {
     return () => {

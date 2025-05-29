@@ -1,95 +1,95 @@
 import { toast } from "sonner";
-import { API_KEY, ServerInfo, serverIdMap, SERVER_TYPES, BASE_URL } from "./types";
+import { API_BASE_URL, API_KEY } from '@/config';
+import { ServerInfo, SERVER_TYPES } from "./types";
 
-// API base URL
-const API_BASE_URL = '/api';
+interface SessionInfo {
+  id: string;
+  name: string;
+  maxUsers: number;
+  userCount: number;
+  type: number;
+  worldType: number;
+  minimumGradeLevel: number;
+  minimumAppVersion: string;
+  maximumAppVersion: string | null;
+}
+
+interface ServerResponse {
+  errorCode: number;
+  result: SessionInfo[];
+}
 
 // Get all available servers
-export async function getServers(): Promise<ServerInfo[]> {
+export const getServers = async (): Promise<ServerInfo[]> => {
   try {
-    console.log(`Using API Key for servers: ${API_KEY ? 'Present' : 'Missing'}`);
-    
-    const response = await fetch(`${API_BASE_URL}/sessions`, {
-      headers: {
-        "Authorization": `Bearer ${API_KEY}`,
-        "Accept": "application/json",
-        "Content-Type": "application/json"
+    const response = await fetch(
+      `${API_BASE_URL}/sessions?apikey=${API_KEY}`,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
       }
-    });
+    );
 
     if (!response.ok) {
-      if (response.status === 401) {
-        console.error("Unauthorized - API Key may be invalid");
-        toast.error("API authorization failed. Please check your API key.");
-        throw new Error(`API authorization failed: ${response.status}`);
-      } else if (response.status === 403) {
-        console.error("Forbidden - API Key may lack permissions");
-        toast.error("API access forbidden. Please check your API key permissions.");
-        throw new Error(`API access forbidden: ${response.status}`);
-      } else {
-        throw new Error(`API error: ${response.status}`);
-      }
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data = await response.json();
-    console.log("Available servers:", data);
+    const data: ServerResponse = await response.json();
     
-    if (data && data.result && Array.isArray(data.result)) {
-      // Server data is in the result field
-      const servers = data.result;
-      console.log("Processing servers:", servers);
-      
-      // Clear the existing map
-      Object.keys(serverIdMap).forEach(key => {
-        delete serverIdMap[key];
-      });
-      
-      servers.forEach((server: any) => {
-        if (server.name && server.id) {
-          // Direct mapping from full name to ID
-          if (server.name.includes("Casual")) {
-            serverIdMap["casual"] = server.id;
-            serverIdMap[SERVER_TYPES.CASUAL.toLowerCase()] = server.id;
-          } else if (server.name.includes("Training")) {
-            serverIdMap["training"] = server.id;
-            serverIdMap[SERVER_TYPES.TRAINING.toLowerCase()] = server.id;
-          } else if (server.name.includes("Expert")) {
-            serverIdMap["expert"] = server.id;
-            serverIdMap[SERVER_TYPES.EXPERT.toLowerCase()] = server.id;
-          }
-        }
-      });
-      
-      console.log("Server ID mapping:", serverIdMap);
-      return servers;
+    if (data.errorCode !== 0) {
+      throw new Error(`API error! code: ${data.errorCode}`);
     }
-    
-    return [];
+
+    // Konvertiere die API-Antwort in unser ServerInfo-Format
+    return data.result.map(session => ({
+      id: session.id,
+      name: session.name,
+      type: getServerType(session.worldType),
+      status: 'online',
+      maxUsers: session.maxUsers,
+      currentUsers: session.userCount
+    }));
   } catch (error) {
-    console.error("Failed to fetch servers:", error);
-    toast.error("Failed to load server list. Please try again.");
-    return [];
+    console.error('Error fetching servers:', error);
+    throw error;
+  }
+};
+
+// Hilfsfunktion zur Konvertierung des worldType in unseren Server-Typ
+function getServerType(worldType: number): string {
+  switch (worldType) {
+    case 1:
+      return 'Casual';
+    case 2:
+      return 'Training';
+    case 3:
+      return 'Expert';
+    default:
+      return 'Unknown';
   }
 }
 
-// Get the actual server ID for a named server type
-export function getServerIdByName(serverName: string): string {
-  // Try first with the exact name
-  const serverId = serverIdMap[serverName.toLowerCase()];
-  
-  if (!serverId) {
-    // If not found, try alternative matches
-    if (serverName.toLowerCase().includes("casual")) {
-      return serverIdMap["casual"] || "";
-    } else if (serverName.toLowerCase().includes("training")) {
-      return serverIdMap["training"] || "";
-    } else if (serverName.toLowerCase().includes("expert")) {
-      return serverIdMap["expert"] || "";
-    }
-    
-    console.error(`No ID found for server: ${serverName}. Current mapping:`, serverIdMap);
-    return "";
-  }
-  
-  return serverId;
-}
+// Server ID Mapping
+export const serverIdMap: { [key: string]: string } = {};
+
+// Aktualisiere das Server ID Mapping
+export const updateServerIdMap = (servers: ServerInfo[]) => {
+  servers.forEach(server => {
+    serverIdMap[server.name.toLowerCase()] = server.id;
+  });
+};
+
+// Hole die Server ID anhand des Namens
+export const getServerIdByName = (serverName: string): string | undefined => {
+  return serverIdMap[serverName.toLowerCase()];
+};
+
+// Hole den Server-Namen anhand der ID
+export const getServerNameById = (serverId: string): string | undefined => {
+  // Konvertiere die ID in den Server-Namen
+  const serverName = Object.entries(serverIdMap).find(([_, id]) => id === serverId)?.[0];
+  return serverName;
+};

@@ -1,5 +1,5 @@
-import { API_KEY, BASE_URL } from './types';
-import { getServerIdByName } from './serverService';
+import { API_KEY, API_BASE_URL } from '@/config';
+import { getServerIdByName, updateServerIdMap, getServers } from './serverService';
 
 export interface ActiveATCFacility {
   frequencyId: string;
@@ -29,40 +29,42 @@ export interface WorldResponse {
 }
 
 export async function getWorldStatus(serverName: string): Promise<AirportStatus[]> {
-  const serverId = getServerIdByName(serverName);
-  
-  if (!serverId) {
-    throw new Error(`Server ID not found for: ${serverName}`);
-  }
-
   try {
+    // Aktualisiere die Server-ID-Map
+    const servers = await getServers();
+    updateServerIdMap(servers);
+    
+    const serverId = getServerIdByName(serverName);
+    
+    if (!serverId) {
+      console.error(`Error: Server ID not found for: ${serverName}`);
+      throw new Error(`Server ID not found for: ${serverName}`);
+    }
+
     console.log(`Fetching world status for server: ${serverName} (${serverId})`);
     
-    const response = await fetch(`${BASE_URL}/sessions/${serverId}/world`, {
+    const response = await fetch(`${API_BASE_URL}/sessions/${serverId}/world?apikey=${API_KEY}`, {
+      method: 'GET',
       headers: {
-        "Authorization": `Bearer ${API_KEY}`,
-        "Accept": "application/json",
-        "Content-Type": "application/json"
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
       }
     });
 
     if (!response.ok) {
+      console.error(`World API HTTP error: ${response.status} for server ${serverName}`);
       throw new Error(`World API error: ${response.status}`);
     }
 
     const data: WorldResponse = await response.json();
     
     if (data.errorCode !== 0) {
+      console.error(`World API returned error code: ${data.errorCode} for server ${serverName}`);
       throw new Error(`World API returned error code: ${data.errorCode}`);
     }
 
-    // Filter airports with activity (inbound or outbound flights)
-    const activeAirports = data.result.filter(airport => 
-      airport.inboundFlightsCount > 0 || airport.outboundFlightsCount > 0
-    );
-
-    console.log(`Found ${activeAirports.length} airports with activity`);
-    return activeAirports;
+    console.log(`Found ${data.result.length} total airports`);
+    return data.result;
     
   } catch (error) {
     console.error("Failed to fetch world status:", error);

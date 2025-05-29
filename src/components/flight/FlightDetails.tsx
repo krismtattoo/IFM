@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Flight } from '@/services/flight';
+import React, { useState, useEffect, useMemo } from 'react';
+import { FlightEntry, FlightTrackPoint } from '@/services/flight';
 import { X, Plane, MapPin, Clock, Gauge, Navigation, User, BarChart3, Route, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -15,7 +15,7 @@ import SpeedChart from './charts/SpeedChart';
 import VerticalSpeedChart from './charts/VerticalSpeedChart';
 
 interface FlightDetailsProps {
-  flight: Flight;
+  flight: FlightEntry;
   serverID: string;
   onClose: () => void;
 }
@@ -59,8 +59,6 @@ const FlightDetails: React.FC<FlightDetailsProps> = ({ flight, serverID, onClose
     console.log('Flight data:', {
       aircraftId: flight.aircraftId,
       liveryId: flight.liveryId,
-      aircraft: flight.aircraft,
-      livery: flight.livery,
       flightId: flight.flightId
     });
   }, [flight]);
@@ -106,15 +104,17 @@ const FlightDetails: React.FC<FlightDetailsProps> = ({ flight, serverID, onClose
   }, [activeSection, flight, serverID]);
 
   const loadFlightPlanData = async () => {
+    console.log('✈️ loadFlightPlanData function started.');
     setLoadingFlightPlan(true);
     try {
+      console.log(`✈️ Attempting to load flight plan for serverID: ${serverID}, flightId: ${flight.flightId}`);
       const routeData = await getFlightRoute(serverID, flight.flightId);
       
       if (routeData.flightPlan && routeData.flightPlan.length > 0) {
         const flightPlanPoints = routeData.flightPlan;
         
         const waypoints = flightPlanPoints.map((point, index) => {
-          const waypointName = (point as any).waypointName || `WP${index + 1}`;
+          const waypointName = point.waypointName || `WP${index + 1}`;
           return {
             name: waypointName,
             latitude: point.latitude,
@@ -276,7 +276,7 @@ const FlightDetails: React.FC<FlightDetailsProps> = ({ flight, serverID, onClose
                   <div className="animate-pulse bg-slate-600 h-4 w-3/4 rounded"></div>
                 ) : (
                   <p className="text-sm font-semibold text-white">
-                    {aircraftName || flight.aircraft || 'Unknown Aircraft'}
+                    {aircraftName || 'Unknown Aircraft'}
                   </p>
                 )}
                 {aircraftError && (
@@ -293,7 +293,7 @@ const FlightDetails: React.FC<FlightDetailsProps> = ({ flight, serverID, onClose
                 <div className="animate-pulse bg-slate-600 h-4 w-2/3 rounded"></div>
               ) : (
                 <p className="text-sm text-white truncate">
-                  {liveryName || flight.livery || 'Standard Livery'}
+                  {liveryName || 'Standard Livery'}
                 </p>
               )}
               {aircraftError && (
@@ -488,15 +488,15 @@ const FlightDetails: React.FC<FlightDetailsProps> = ({ flight, serverID, onClose
           let verticalSpeed = 0;
           if (idx > 0) {
             const prev = arr[idx - 1];
-            const dt = (point.timestamp - prev.timestamp) / 60000; // Minuten
+            const dt = (new Date(point.date).getTime() - new Date(prev.date).getTime()) / 60000; // Minuten
             if (dt > 0) {
               verticalSpeed = (point.altitude - prev.altitude) / dt;
             }
           }
           return {
-            time: new Date(point.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time: new Date(point.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             altitude: point.altitude,
-            speed: 0, // Keine echte Speed-Info im TrackPoint vorhanden
+            speed: point.groundSpeed, // Use groundSpeed from PositionReport
             verticalSpeed: verticalSpeed,
           };
         })
@@ -794,11 +794,11 @@ const FlightDetails: React.FC<FlightDetailsProps> = ({ flight, serverID, onClose
                 variant="ghost"
                 size="sm"
                 className={`flex-1 rounded-none h-10 flex items-center gap-1 ${
-                  activeSection === id 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                  activeSection === id
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
                     : 'text-gray-400 hover:text-white hover:bg-slate-700'
                 }`}
-                onClick={() => setActiveSection(id as any)}
+                onClick={() => setActiveSection(id as 'overview' | 'route' | 'performance' | 'pilot')}
               >
                 <Icon className="w-3 h-3" />
                 <span className="text-xs">{label}</span>

@@ -1,7 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { toast } from "sonner";
-import { getFlights, getServers, SERVER_TYPES, Flight, ServerInfo } from '@/services/flight';
+import { getFlights, getServers, SERVER_TYPES, ServerInfo, FlightEntry, updateServerIdMap } from '@/services/flight';
+import { API_KEY } from '@/config';
 
 interface Server {
   id: string;
@@ -9,14 +9,9 @@ interface Server {
 }
 
 export function useFlightData() {
-  const [activeServer, setActiveServer] = useState<Server | null>(null);
-  const [servers] = useState<Server[]>([
-    { id: "casual", name: SERVER_TYPES.CASUAL },
-    { id: "training", name: SERVER_TYPES.TRAINING },
-    { id: "expert", name: SERVER_TYPES.EXPERT }
-  ]);
+  const [activeServer, setActiveServer] = useState<ServerInfo | null>(null);
   const [availableServers, setAvailableServers] = useState<ServerInfo[]>([]);
-  const [flights, setFlights] = useState<Flight[]>([]);
+  const [flights, setFlights] = useState<FlightEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [serversInitialized, setServersInitialized] = useState(false);
@@ -26,27 +21,46 @@ export function useFlightData() {
     const fetchAvailableServers = async () => {
       setInitializing(true);
       try {
+        console.log('Fetching available servers...');
         const serverData = await getServers();
+        console.log(`Retrieved ${serverData.length} available servers`, serverData);
         setAvailableServers(serverData);
         setServersInitialized(true);
         
+        // Update the server ID map after fetching servers
+        updateServerIdMap(serverData);
+
         // Set default server once we have server data
         if (serverData.length > 0) {
-          // Wait a bit to ensure server mappings are set
-          setTimeout(() => {
-            setActiveServer({ id: "casual", name: SERVER_TYPES.CASUAL });
-          }, 500);
+          // Finde den Casual Server
+          const casualServer = serverData.find(server => 
+            server.name.toLowerCase().includes('casual')
+          );
+          
+          if (casualServer) {
+            setActiveServer(casualServer);
+            console.log('Default server set to Casual:', casualServer);
+          } else {
+            // Setze den ersten verfügbaren Server, wenn Casual nicht gefunden wird
+            setActiveServer(serverData[0]);
+            console.log('Default server set to first available:', serverData[0]);
+          }
+        } else {
+            console.warn('No available servers found.');
+            setActiveServer(null);
         }
       } catch (error) {
         console.error("Failed to fetch available servers", error);
         toast.error("Failed to connect to Infinite Flight API.");
+        setAvailableServers([]); // Ensure availableServers is empty on error
+        setActiveServer(null);
       } finally {
         setInitializing(false);
       }
     };
 
     fetchAvailableServers();
-  }, []);
+  }, []); // Leeres Array als Dependency, nur einmal ausführen
 
   // Load flights for active server
   useEffect(() => {
@@ -55,14 +69,8 @@ export function useFlightData() {
       
       setLoading(true);
       try {
-        // Make sure server IDs are initialized before fetching flights
-        if (!serversInitialized) {
-          await getServers();
-          setServersInitialized(true);
-        }
-        
         console.log(`Fetching flights for server: ${activeServer.id}`);
-        const flightData = await getFlights(activeServer.id);
+        const flightData = await getFlights(activeServer.id, API_KEY);
         console.log(`Retrieved ${flightData.length} flights`);
         setFlights(flightData);
       } catch (error) {
@@ -78,21 +86,27 @@ export function useFlightData() {
     // Poll for updated flight data every 15 seconds
     const interval = setInterval(fetchFlights, 15000);
     return () => clearInterval(interval);
-  }, [activeServer, serversInitialized]);
+  }, [activeServer]);
 
   // Handle server change
   const handleServerChange = (serverId: string) => {
-    console.log(`Selected server: ${serverId}`);
-    const server = servers.find(s => s.id === serverId);
-    if (server) setActiveServer(server);
+    console.log(`Attempting to change server to ID: ${serverId}`);
+    const server = availableServers.find(s => s.id === serverId);
+    if (server) {
+      setActiveServer(server);
+      console.log('Active server changed to:', server);
+    } else {
+      console.warn(`Server with ID ${serverId} not found in available servers.`);
+    }
   };
 
   return {
     activeServer,
-    servers,
+    servers: availableServers,
     flights,
     loading,
     initializing,
-    handleServerChange
+    handleServerChange,
+    serversInitialized
   };
 }

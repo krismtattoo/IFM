@@ -23,11 +23,14 @@ const NativeLeafletMap: React.FC<NativeLeafletMapProps> = ({ onMapInit }) => {
 
     console.log("🗺️ Initializing native Leaflet map with CartoDB Positron light design");
 
-    // Create the map
     const map = L.map(mapContainer.current, {
       center: [51.0, 10.5],
       zoom: 5,
-      zoomControl: true,
+      zoomControl: false, // Disable zoom control
+      attributionControl: false, // Disable attribution control
+      minZoom: 2,
+      maxZoom: 19,
+      worldCopyJump: true,
       preferCanvas: true, // Better performance for many markers
     });
 

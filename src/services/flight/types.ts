@@ -1,8 +1,10 @@
-export enum SERVER_TYPES {
-  CASUAL = 'Casual',
-  TRAINING = 'Training',
-  EXPERT = 'Expert',
-}
+export const SERVER_TYPES = {
+  CASUAL: 'Casual',
+  TRAINING: 'Training',
+  EXPERT: 'Expert'
+} as const;
+
+export type ServerType = typeof SERVER_TYPES[keyof typeof SERVER_TYPES];
 
 // API Key für Infinite Flight API
 export const API_KEY = 'r8hxd0a54uoxrgj51ag5usiba3uls8ii';
@@ -18,9 +20,10 @@ export interface FlightTrackPoint {
   latitude: number;
   longitude: number;
   altitude: number;
-  speed: number;
   heading: number;
-  timestamp: string;
+  speed: number;
+  timestamp: number;
+  waypointName?: string;
 }
 
 export interface ServerInfo {
@@ -41,8 +44,10 @@ export interface AirportInfo {
   icao: string;
   country: string;
   city: string;
+  lastUpdate: string;
 }
 
+/*
 export interface Flight {
   id: string;
   callsign: string;
@@ -61,6 +66,7 @@ export interface Flight {
   squawk: string;
   lastUpdate: string;
 }
+*/
 
 export interface AirportStatus {
   id: string;
@@ -105,7 +111,7 @@ export interface AircraftData {
 export interface WorldResponse {
   result: {
     servers: ServerInfo[];
-    flights: Flight[];
+    flights: FlightEntry[];
     airports: AirportInfo[];
   };
 }
@@ -125,4 +131,58 @@ export interface Airport {
   icao: string;
   country: string;
   city: string;
+}
+
+export interface PositionReport {
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  track: number;
+  groundSpeed: number;
+  date: string;
+}
+
+export interface Server {
+  id: string;
+  name: string;
+  type: string;
+  apiKey: string;
+}
+
+export interface FlightEntry {
+  flightId: string;
+  userId: string;
+  aircraftId: string;
+  liveryId: string;
+  username: string | null;
+  virtualOrganization: string | null;
+  callsign: string;
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  speed: number;
+  verticalSpeed: number;
+  track: PositionReport[];
+  heading: number;
+  lastReport: string;
+  pilotState: number;
+  isConnected: boolean;
+}
+
+export interface FlightInfo {
+  id: string;
+  userId: string;
+  username: string;
+  callsign: string;
+  aircraftId: string;
+  liveryId: string;
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  speed: number;
+  verticalSpeed: number;
+  heading: number;
+  onGround: boolean;
+  state: string;
+  lastUpdate: string;
 } 

@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Flight, FlightTrackPoint } from '@/services/flight';
+import { FlightEntry, FlightTrackPoint } from '@/services/flight';
 import { getFlightRoute } from '@/services/flight';
 import { toast } from "sonner";
 import L from 'leaflet';
-import { History, Sun, Moon } from 'lucide-react';
+import { History, Sun, Moon, Sparkles } from 'lucide-react';
 import { EarlyAccessAlert } from './EarlyAccessAlert';
 import EarlyAccessPopup from './EarlyAccessPopup';
 
@@ -24,6 +24,7 @@ import { useFlightSearch, SearchResult } from '@/hooks/useFlightSearch';
 import { useAirportData } from '@/hooks/useAirportData';
 import { useAirportInfo } from '@/hooks/useAirportInfo';
 import { Airport, airports } from '@/data/airportData';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 const FlightMap: React.FC = () => {
   const { 
@@ -32,7 +33,8 @@ const FlightMap: React.FC = () => {
     flights, 
     loading, 
     initializing, 
-    handleServerChange 
+    handleServerChange,
+    serversInitialized
   } = useFlightData();
   
   // Search functionality
@@ -58,7 +60,7 @@ const FlightMap: React.FC = () => {
   
   const [map, setMap] = useState<L.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
+  const [selectedFlight, setSelectedFlight] = useState<FlightEntry | null>(null);
   const [flownRoute, setFlownRoute] = useState<FlightTrackPoint[]>([]);
   const [flightPlan, setFlightPlan] = useState<FlightTrackPoint[]>([]);
   const [airportMarkers, setAirportMarkers] = useState<L.Marker[]>([]);
@@ -67,9 +69,14 @@ const FlightMap: React.FC = () => {
   const [selectionInProgress, setSelectionInProgress] = useState<string | null>(null);
   
   // Airport data hook
-  const { airports: liveAirports, loading: airportsLoading } = useAirportData({ 
-    activeServerId: activeServer?.id || null 
+  const { airports: liveAirports, loading: airportsLoading, error: airportError } = useAirportData({ 
+    activeServerId: activeServer?.id || null,
+    serversInitialized
   });
+  
+  useEffect(() => {
+    console.log('🛫 useAirportData hook returned:', { liveAirports, airportsLoading, airportError });
+  }, [liveAirports, airportsLoading, airportError]);
   
   // Unified airport selection state
   const [selectedAirportData, setSelectedAirportData] = useState<UnifiedAirportData | null>(null);
@@ -77,7 +84,6 @@ const FlightMap: React.FC = () => {
   // Airport info hook
   const { airportInfo, loading: airportInfoLoading, fetchAirportInfo, clearAirportInfo } = useAirportInfo();
 
-  const [showChangelog, setShowChangelog] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   const handleMapInit = useCallback((initializedMap: L.Map) => {
@@ -148,20 +154,20 @@ const FlightMap: React.FC = () => {
   }, [airportMarkers, map]);
 
   // Improved flight selection handler with immediate state protection
-  const handleFlightSelect = useCallback(async (flight: Flight) => {
-    console.log(`🎯 Flight selected: ${flight.id} - Starting selection process`);
+  const handleFlightSelect = useCallback(async (flight: FlightEntry) => {
+    console.log(`🎯 Flight selected: ${flight.flightId} - Starting selection process`);
     
     // Clear any airport markers when selecting a flight
     airportMarkers.forEach(marker => map?.removeLayer(marker));
     setAirportMarkers([]);
     
     // CRITICAL: Set selection in progress IMMEDIATELY to protect marker
-    setSelectionInProgress(flight.id);
+    setSelectionInProgress(flight.flightId);
     
     // CRITICAL: Set selected flight IMMEDIATELY (synchronous)
     setSelectedFlight(flight);
     
-    console.log(`🛡️ PROTECTION ACTIVATED for flight ${flight.id}`);
+    console.log(`🛡️ PROTECTION ACTIVATED for flight ${flight.flightId}`);
     
     if (!activeServer) {
       setSelectionInProgress(null);
@@ -170,9 +176,9 @@ const FlightMap: React.FC = () => {
     
     try {
       // Log debug information
-      console.log(`🔍 Fetching route for flight ${flight.id} on server ${activeServer.id}`);
+      console.log(`🔍 Fetching route for flight ${flight.flightId} on server ${activeServer.id}`);
       
-      const routeData = await getFlightRoute(activeServer.id, flight.id);
+      const routeData = await getFlightRoute(activeServer.id, flight.flightId);
       console.log(`📍 Retrieved flight route data:`, routeData);
       
       setFlownRoute(routeData.flownRoute);
@@ -186,7 +192,7 @@ const FlightMap: React.FC = () => {
         });
       }
       
-      console.log(`✅ Selection process completed for flight ${flight.id}`);
+      console.log(`✅ Selection process completed for flight ${flight.flightId}`);
     } catch (error) {
       console.error("❌ Failed to fetch flight route:", error);
       toast.error("Failed to load flight route.");
@@ -194,7 +200,7 @@ const FlightMap: React.FC = () => {
       // Clear selection in progress after a delay to ensure marker stability
       setTimeout(() => {
         setSelectionInProgress(null);
-        console.log(`🔓 Selection process finished for flight ${flight.id}`);
+        console.log(`🔓 Selection process finished for flight ${flight.flightId}`);
       }, 2000); // 2 second delay to ensure stability
     }
   }, [activeServer, map, airportMarkers]);
@@ -243,7 +249,7 @@ const FlightMap: React.FC = () => {
     console.log(`🔍 Search result selected:`, result);
 
     if (result.type === 'aircraft' || result.type === 'user') {
-      const flight = result.data as Flight;
+      const flight = result.data as FlightEntry;
       
       // Select the flight
       handleFlightSelect(flight);
@@ -327,7 +333,7 @@ const FlightMap: React.FC = () => {
             icao: selectedLiveAirport.airportIcao,
             liveData: selectedLiveAirport,
             staticData: airports.find(a => a.icao === selectedLiveAirport.airportIcao) || undefined,
-            priority: 'live' as 'live'
+            priority: 'live' as const
           };
           console.log("Debug: Setting selectedAirportData to:", newSelectedAirportData);
           setSelectedAirportData(newSelectedAirportData);
@@ -351,8 +357,8 @@ const FlightMap: React.FC = () => {
   }, [map, airportMarkers, clearSearch, liveAirports, airports, setSelectedAirportData, handleFlightSelect, handleUnifiedAirportSelect]);
 
   // Enhanced airport details with flight selection
-  const handleAirportFlightSelect = useCallback((flight: Flight) => {
-    console.log(`🛩️ Flight selected from airport panel: ${flight.id}`);
+  const handleAirportFlightSelect = useCallback((flight: FlightEntry) => {
+    console.log(`🛩️ Flight selected from airport panel: ${flight.flightId}`);
     
     // Close airport details
     handleCloseAirportDetails();
@@ -383,27 +389,60 @@ const FlightMap: React.FC = () => {
   // Enhanced selected flight ID calculation
   const selectedFlightId = useMemo(() => {
     // Return either the selected flight ID or the one in progress
-    const id = selectedFlight?.id || selectionInProgress || null;
+    const id = selectedFlight?.flightId || selectionInProgress || null;
     console.log(`🎯 Current selected/protected flight ID: ${id}`);
     return id;
   }, [selectedFlight, selectionInProgress]);
 
   return (
     <div className="relative h-screen w-full bg-[#151920]">
-      {/* Early Access Popup */}
-      <EarlyAccessPopup />
-      
+      {/* Version Badge - fixed top left */}
+      <div className="fixed top-2 left-2 z-50 flex items-center gap-2 px-2 py-1 bg-gradient-to-r from-slate-800/90 to-slate-900/90 rounded-lg border border-blue-700/40 shadow group text-[11px] sm:text-base">
+        <span className="text-[10px] sm:text-sm font-bold bg-gradient-to-r from-blue-400 to-blue-300 bg-clip-text text-transparent group-hover:from-blue-300 group-hover:to-blue-200 transition-all duration-300 tracking-wide">
+          v0.1.0
+        </span>
+        <div className="h-2 sm:h-4 w-[1px] bg-slate-600/50" />
+        <span className="text-[8px] sm:text-xs font-semibold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent group-hover:from-purple-300 group-hover:to-pink-300 transition-all duration-300 uppercase tracking-wider">
+          Early Access
+        </span>
+      </div>
+
+      {/* Server Selection - fixed top right */}
+      <div className="fixed top-2 right-2 z-50">
+        <ServerSelection 
+          servers={servers} 
+          onServerChange={handleServerChange} 
+          selectedServerId={activeServer?.id}
+          flights={flights}
+        />
+      </div>
+
+      {/* Search Button - exakt über Darkmode, gleicher Abstand wie die anderen Icons */}
+      <button
+        onClick={openSearch}
+        style={{
+          position: 'fixed',
+          bottom: 152,
+          right: 24,
+          zIndex: 9999,
+          background: 'rgba(30,41,59,0.95)',
+          borderRadius: '50%',
+          width: 56,
+          height: 56,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+          border: '2px solid #334155',
+          cursor: 'pointer',
+        }}
+        title="Suche öffnen"
+      >
+        <svg xmlns='http://www.w3.org/2000/svg' className='w-7 h-7 text-pink-300' fill='none' viewBox='0 0 24 24' stroke='currentColor'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z' /></svg>
+      </button>
+
       {/* Early Access Alert */}
       <EarlyAccessAlert />
-      
-      {/* Server Selection Tabs */}
-      <ServerSelection 
-        servers={servers} 
-        onServerChange={handleServerChange} 
-      />
-      
-      {/* Search Button */}
-      <SearchButton onClick={openSearch} />
       
       {/* Search Dialog */}
       <FlightSearch
@@ -448,9 +487,6 @@ const FlightMap: React.FC = () => {
           onClose={handleCloseFlightDetails} 
         />
       )}
-      
-      {/* Flight Count */}
-      <FlightCount count={flights.length} />
       
       {/* Native Leaflet Map Container */}
       <NativeLeafletMap onMapInit={handleMapInit} />
@@ -513,75 +549,115 @@ const FlightMap: React.FC = () => {
       </button>
       
       {/* Changelog Icon unten rechts */}
-      <button
-        onClick={() => setShowChangelog(true)}
-        style={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          zIndex: 9999,
-          background: 'rgba(30,41,59,0.95)',
-          borderRadius: '50%',
-          width: 56,
-          height: 56,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-          border: '2px solid #334155',
-          cursor: 'pointer',
-        }}
-        title="Changelog anzeigen"
-      >
-        <History size={28} className="text-white" />
-      </button>
-      
-      {/* Changelog Fenster */}
-      {showChangelog && (
-        <div className="fixed top-4 right-4 w-[480px] max-h-[calc(100vh-2rem)] z-50">
-          <div className="bg-slate-900 border-slate-700 shadow-2xl rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-700 bg-gradient-to-r from-slate-800 to-slate-900 p-4">
-              <div className="flex items-center gap-3">
-                <History className="w-5 h-5 text-blue-400" />
-                <h2 className="text-lg font-bold text-white">Changelog</h2>
+      <Dialog>
+        <DialogTrigger asChild>
+          <button
+            style={{
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              zIndex: 9999,
+              background: 'rgba(30,41,59,0.95)',
+              borderRadius: '50%',
+              width: 56,
+              height: 56,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+              border: '2px solid #334155',
+              cursor: 'pointer',
+            }}
+            title="Changelog anzeigen"
+          >
+            <History size={28} className="text-white" />
+          </button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-[425px] md:max-w-[600px] lg:max-w-[800px] bg-slate-900 text-white border-slate-700 shadow-2xl rounded-xl">
+          <DialogHeader className="border-b border-slate-700 pb-4">
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-blue-400">
+              <History className="w-6 h-6" />
+              Changelog
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              See the latest updates and improvements to the application.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar space-y-8">
+            {/* Changelog Entries */}
+            <div className="relative">
+              <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500/50 via-purple-500/50 to-blue-500/50 rounded-full" />
+              <div className="pl-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-3 h-3 rounded-full bg-blue-500 ring-4 ring-blue-500/20" />
+                  <h3 className="font-semibold text-blue-300 text-lg">v1.2.0</h3>
+                  <span className="text-sm text-slate-500">2024-07-01</span>
+                </div>
+                <ul className="space-y-2 text-slate-300">
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-400">•</span>
+                    <span>Added Changelog window</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-400">•</span>
+                    <span>Flight route line is now significantly smoother</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-400">•</span>
+                    <span>Improved top-left logo</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-blue-400">•</span>
+                    <span>Performance optimizations for the map</span>
+                  </li>
+                </ul>
               </div>
-              <button
-                onClick={() => setShowChangelog(false)}
-                className="text-gray-400 hover:text-white hover:bg-slate-700 rounded p-1"
-                title="Schließen"
-              >
-                <span style={{fontSize: 20, fontWeight: 'bold'}}>&times;</span>
-              </button>
             </div>
-            <div className="p-4 overflow-y-auto max-h-[65vh] custom-scrollbar text-white space-y-4">
-              {/* Changelog Entries */}
-              <div>
-                <h3 className="font-semibold text-blue-300 mb-1">v1.2.0 – 2024-07-01</h3>
-                <ul className="list-disc list-inside text-sm text-slate-200 space-y-1">
-                  <li>Added Changelog window</li>
-                  <li>Flight route line is now significantly smoother</li>
-                  <li>Improved top-left logo</li>
-                  <li>Performance optimizations for the map</li>
+
+            <div className="relative">
+              <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500/50 via-purple-500/50 to-blue-500/50 rounded-full" />
+              <div className="pl-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-3 h-3 rounded-full bg-purple-500 ring-4 ring-purple-500/20" />
+                  <h3 className="font-semibold text-purple-300 text-lg">v1.1.0</h3>
+                  <span className="text-sm text-slate-500">2024-06-20</span>
+                </div>
+                <ul className="space-y-2 text-slate-300">
+                  <li className="flex items-start gap-2">
+                    <span className="text-purple-400">•</span>
+                    <span>Revamped flight info window</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-purple-400">•</span>
+                    <span>New airport icons</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-purple-400">•</span>
+                    <span>Bug fixes and UI improvements</span>
+                  </li>
                 </ul>
               </div>
-              <div>
-                <h3 className="font-semibold text-blue-300 mb-1">v1.1.0 – 2024-06-20</h3>
-                <ul className="list-disc list-inside text-sm text-slate-200 space-y-1">
-                  <li>Revamped flight info window</li>
-                  <li>New airport icons</li>
-                  <li>Bug fixes and UI improvements</li>
-                </ul>
-              </div>
-              <div>
-                <h3 className="font-semibold text-blue-300 mb-1">v1.0.0 – 2024-06-01</h3>
-                <ul className="list-disc list-inside text-sm text-slate-200 space-y-1">
-                  <li>Initial version released</li>
+            </div>
+
+            <div className="relative">
+              <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500/50 via-purple-500/50 to-blue-500/50 rounded-full" />
+              <div className="pl-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-3 h-3 rounded-full bg-slate-500 ring-4 ring-slate-500/20" />
+                  <h3 className="font-semibold text-slate-300 text-lg">v1.0.0</h3>
+                  <span className="text-sm text-slate-500">2024-06-01</span>
+                </div>
+                <ul className="space-y-2 text-slate-300">
+                  <li className="flex items-start gap-2">
+                    <span className="text-slate-400">•</span>
+                    <span>Initial version released</span>
+                  </li>
                 </ul>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
